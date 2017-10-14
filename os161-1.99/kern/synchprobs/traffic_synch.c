@@ -21,8 +21,14 @@
 /*
  * replace this with declarations of any synchronization and other variables you need here
  */
-static struct semaphore *intersectionSem;
+struct Pair {
+	int first;
+	int second;
+};
 
+static struct lock *inter_lock;
+static struct cv *cvs[4][4]; 
+int inter_state[4][4];
 
 /* 
  * The simulation driver will call this function once before starting
@@ -34,11 +40,17 @@ static struct semaphore *intersectionSem;
 void
 intersection_sync_init(void)
 {
-  /* replace this default implementation with your own implementation */
-
-  intersectionSem = sem_create("intersectionSem",1);
-  if (intersectionSem == NULL) {
-    panic("could not create intersection semaphore");
+  inter_lock = lock_create("inter_lock");
+  if (inter_lock == NULL) {
+    panic("could not create lock!");
+  }
+  for(int i = 0; i < 4; i++){
+	for(int j = 0; j < 4; j++){
+		cvs[i][j] = cv_create("intCV");
+		if(cvs[i][j] == NULL){
+			panic("could not create cv!");
+		}
+	}
   }
   return;
 }
@@ -53,11 +65,51 @@ intersection_sync_init(void)
 void
 intersection_sync_cleanup(void)
 {
-  /* replace this default implementation with your own implementation */
-  KASSERT(intersectionSem != NULL);
-  sem_destroy(intersectionSem);
+  KASSERT(inter_lock != NULL);
+  lock_destroy(inter_lock);
+  for(int i = 0; i < 4; i++){
+	for(int j = 0; j < 4; j++){
+		KASSERT(cvs[i][j] != NULL);
+		cv_destroy(cvs[i][j]);
+	}
+  }
 }
 
+static bool
+right_turn(Direction origin, Direction destination) {
+  if (((origin == west) && (destination == south)) ||
+      ((origin == south) && (destination == east)) ||
+      ((origin == east) && (destination == north)) ||
+      ((origin == north) && (destination == west))){ 
+    return true;
+  } else {
+    return false;
+  }
+}
+
+static bool 
+is_conflict(Direction o1, Direction d1, Direction o2, Direction d2){
+	return !((o1 == o2) || ((o1 == d2) && (o2 == d1)) || (d1 != d2 && 
+		(right_turn(o1,d1) || right_turn(o2,d2))));
+}
+
+struct Pair* exists_conflict(Direction origin, Direction destination);
+struct Pair*
+exists_conflict(Direction origin, Direction destination){
+   struct Pair * pair = kmalloc(sizeof(struct Pair));
+   for(int i = 0; i < 4; i++){
+	for(int j = 0; j < 4; j++){
+	    if(inter_state[i][j] > 0 && is_conflict(i,j,origin,destination)){
+		pair->first = i;
+		pair->second = j;
+		return pair;
+	    }
+	}
+   }
+   pair->first = -1;
+   pair->second = -1;
+   return pair;
+}
 
 /*
  * The simulation driver will call this function each time a vehicle
@@ -71,15 +123,23 @@ intersection_sync_cleanup(void)
  *
  * return value: none
  */
-
 void
 intersection_before_entry(Direction origin, Direction destination) 
 {
-  /* replace this default implementation with your own implementation */
-  (void)origin;  /* avoid compiler complaint about unused parameter */
-  (void)destination; /* avoid compiler complaint about unused parameter */
-  KASSERT(intersectionSem != NULL);
-  P(intersectionSem);
+  lock_acquire(inter_lock);
+  struct Pair *curConflict;
+  curConflict = exists_conflict(origin,destination);
+  struct Pair *invPair = kmalloc(sizeof(struct Pair));
+  invPair->first = -1;
+  invPair->second = -1; 
+  while(curConflict->first != invPair->first && curConflict->second != invPair->second){
+	cv_wait(cvs[curConflict->first][curConflict->second],inter_lock);
+	kfree(curConflict);
+	curConflict = exists_conflict(origin,destination);
+  }
+  inter_state[origin][destination]++;
+  kfree(invPair);
+  lock_release(inter_lock);
 }
 
 
@@ -97,9 +157,8 @@ intersection_before_entry(Direction origin, Direction destination)
 void
 intersection_after_exit(Direction origin, Direction destination) 
 {
-  /* replace this default implementation with your own implementation */
-  (void)origin;  /* avoid compiler complaint about unused parameter */
-  (void)destination; /* avoid compiler complaint about unused parameter */
-  KASSERT(intersectionSem != NULL);
-  V(intersectionSem);
+	lock_acquire(inter_lock);
+	cv_signal(cvs[origin][destination],inter_lock);
+	inter_state[origin][destination]--;
+	lock_release(inter_lock);
 }

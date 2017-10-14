@@ -158,7 +158,7 @@ void
 intersection_after_exit(Direction origin, Direction destination) 
 {
 	lock_acquire(inter_lock);
-	cv_signal(cvs[origin][destination],inter_lock);
+	cv_broadcast(cvs[origin][destination],inter_lock);
 	inter_state[origin][destination]--;
 	lock_release(inter_lock);
 }

@@ -43,6 +43,7 @@
  */
 
 #include <types.h>
+#include <kern/errno.h>
 #include <proc.h>
 #include <current.h>
 #include <addrspace.h>
@@ -51,10 +52,16 @@
 #include <synch.h>
 #include <kern/fcntl.h>  
 
+
 /*
  * The process for the kernel; this holds all the kernel-only threads.
  */
 struct proc *kproc;
+
+/*
+ * The PID Manager
+ */
+struct pidManager *pidManager;
 
 /*
  * Mechanism for making the kernel menu thread sleep while processes are running
@@ -68,7 +75,6 @@ static struct semaphore *proc_count_mutex;
 /* used to signal the kernel menu thread when there are no processes */
 struct semaphore *no_proc_sem;   
 #endif  // UW
-
 
 
 /*
@@ -104,6 +110,45 @@ proc_create(const char *name)
 #endif // UW
 
 	return proc;
+}
+
+static
+struct pidManager *
+pidManager_create(void){
+	return kmalloc(sizeof(*pidManager));
+}
+
+int assignPid(struct proc * proc){
+	int i = PID_MIN;
+	while(*((pidManager->pidArray)+i-PID_MIN) != NULL && i<= PID_MAX)i++;
+	if(i > PID_MAX) return ENPROC; 
+	proc->pid = i;
+	struct pidEntry * pidEntry = kmalloc(sizeof(*pidEntry));
+	pidEntry->pid = i;
+	pidEntry->parent = proc->parent;
+	*(pidManager->pidArray+i) = pidEntry;
+	return i;
+}
+
+void onExit(struct proc * proc){
+	KASSERT(proc != NULL);
+	int i = 0;
+	while(i + PID_MIN <= PID_MAX){
+		struct pidEntry * pidEntry = *(pidManager->pidArray+i);
+		if(pidEntry != NULL){
+			if(pidEntry->parent == proc){
+				kfree(pidEntry);
+				*(pidManager->pidArray+i) = NULL;
+			}
+		}
+		i++;
+	}
+}
+
+void pidManager_destroy(struct pidManager * pidManager){
+	for(int i = 0; i < PID_MAX-PID_MIN+1; i++){
+		kfree(pidManager->pidArray+i);
+	}
 }
 
 /*
@@ -207,7 +252,11 @@ proc_bootstrap(void)
   if (no_proc_sem == NULL) {
     panic("could not create no_proc_sem semaphore\n");
   }
-#endif // UW 
+#endif // UW
+  pidManager = pidManager_create();
+  if(pidManager == NULL) {
+	panic("could not create pidManager");
+  }
 }
 
 /*
@@ -242,7 +291,10 @@ proc_create_runprogram(const char *name)
 	/* VM fields */
 
 	proc->p_addrspace = NULL;
-
+	
+	/* Initialize parent to null; allow Fork command to handle separately */
+	proc->parent = NULL;
+	
 	/* VFS fields */
 
 #ifdef UW
@@ -268,6 +320,7 @@ proc_create_runprogram(const char *name)
            are created using a call to proc_create_runprogram  */
 	P(proc_count_mutex); 
 	proc_count++;
+	
 	V(proc_count_mutex);
 #endif // UW
 

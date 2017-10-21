@@ -30,6 +30,7 @@
 #ifndef _PROC_H_
 #define _PROC_H_
 
+
 /*
  * Definition of a process.
  *
@@ -37,7 +38,20 @@
  */
 
 #include <spinlock.h>
+#include <limits.h>
 #include <thread.h> /* required for struct threadarray */
+
+/*
+ * PID Management structures
+ */
+struct pidEntry {
+	int pid;
+	struct proc *parent;
+};
+
+struct pidManager {
+	struct pidEntry *pidArray[PID_MAX - PID_MIN + 1];
+};
 
 struct addrspace;
 struct vnode;
@@ -50,6 +64,10 @@ struct semaphore;
  */
 struct proc {
 	char *p_name;			/* Name of this process */
+	int pid;			/* PID value for the process */
+	struct proc *parent;		/* Parent for the process as defined
+					   by fork. Should be null if not
+					   created by a fork command. */
 	struct spinlock p_lock;		/* Lock for this structure */
 	struct threadarray p_threads;	/* Threads in this process */
 
@@ -71,6 +89,7 @@ struct proc {
 	/* add more material here as needed */
 };
 
+
 /* This is the process structure for the kernel and for kernel-only threads. */
 extern struct proc *kproc;
 
@@ -78,6 +97,8 @@ extern struct proc *kproc;
 #ifdef UW
 extern struct semaphore *no_proc_sem;
 #endif // UW
+
+extern struct pidManager *pidManager;
 
 /* Call once during system startup to allocate data structures. */
 void proc_bootstrap(void);
@@ -100,5 +121,12 @@ struct addrspace *curproc_getas(void);
 /* Change the address space of the current process, and return the old one. */
 struct addrspace *curproc_setas(struct addrspace *);
 
+/* Get PID value */
+int assignPid(struct proc * proc);
 
+/* Update PID manager on process exit */
+void onExit(struct proc * proc);
+
+void pidManager_destroy(struct pidManager* pidManager);
+#include <limits.h>
 #endif /* _PROC_H_ */

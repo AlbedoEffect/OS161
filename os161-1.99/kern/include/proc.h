@@ -98,6 +98,8 @@ extern struct proc *kproc;
 extern struct semaphore *no_proc_sem;
 #endif // UW
 
+extern struct lock *pidManagerLock;
+
 extern struct pidManager *pidManager;
 
 /* Call once during system startup to allocate data structures. */
@@ -128,5 +130,4 @@ int assignPid(struct proc * proc);
 void onExit(struct proc * proc);
 
 void pidManager_destroy(struct pidManager* pidManager);
-#include <limits.h>
 #endif /* _PROC_H_ */

@@ -64,6 +64,10 @@ struct proc *kproc;
 struct pidManager *pidManager;
 
 /*
+ * Lock for the globabl PID Manager
+ */
+struct lock * pidManagerLock;
+/*
  * Mechanism for making the kernel menu thread sleep while processes are running
  */
 #ifdef UW
@@ -119,6 +123,7 @@ pidManager_create(void){
 }
 
 int assignPid(struct proc * proc){
+	lock_acquire(pidManagerLock);
 	int i = PID_MIN;
 	while(*((pidManager->pidArray)+i-PID_MIN) != NULL && i<= PID_MAX)i++;
 	if(i > PID_MAX) return ENPROC; 
@@ -126,11 +131,13 @@ int assignPid(struct proc * proc){
 	struct pidEntry * pidEntry = kmalloc(sizeof(*pidEntry));
 	pidEntry->pid = i;
 	pidEntry->parent = proc->parent;
-	*(pidManager->pidArray+i) = pidEntry;
+	*(pidManauer->pidArray+i) = pidEntry;
+	lock_release(pidManagerLock);
 	return i;
 }
 
 void onExit(struct proc * proc){
+	lock_acquire(pidManagerLock);
 	KASSERT(proc != NULL);
 	int i = 0;
 	while(i + PID_MIN <= PID_MAX){
@@ -143,12 +150,14 @@ void onExit(struct proc * proc){
 		}
 		i++;
 	}
+	lock_release(pidManagerLock);
 }
 
 void pidManager_destroy(struct pidManager * pidManager){
 	for(int i = 0; i < PID_MAX-PID_MIN+1; i++){
 		kfree(pidManager->pidArray+i);
 	}
+	lock_destroy(pidManagerLock);
 }
 
 /*
@@ -256,6 +265,10 @@ proc_bootstrap(void)
   pidManager = pidManager_create();
   if(pidManager == NULL) {
 	panic("could not create pidManager");
+  }
+  pidManagerLock = lock_create("pid lock");
+  if(pidManagerLock == NULL) {
+	panic("could not create lock for pidManager");
   }
 }
 

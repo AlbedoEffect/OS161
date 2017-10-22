@@ -5,10 +5,12 @@
 #include <lib.h>
 #include <syscall.h>
 #include <current.h>
+#include <synch.h>
 #include <proc.h>
 #include <thread.h>
 #include <addrspace.h>
 #include <copyinout.h>
+
 
   /* this implementation of sys__exit does not do anything with the exit code */
   /* this needs to be fixed to get exit() and waitpid() working properly */
@@ -53,9 +55,7 @@ void sys__exit(int exitcode) {
 int
 sys_getpid(pid_t *retval)
 {
-  /* for now, this is just a stub that always returns a PID of 1 */
-  /* you need to fix this to make it work properly */
-  *retval = 1;
+  *retval = curproc->pid;
   return(0);
 }
 
@@ -92,3 +92,27 @@ sys_waitpid(pid_t pid,
   return(0);
 }
 
+int
+sys_fork(struct trapframe *tf){
+	struct proc* child = proc_create_runprogram("new_child");	
+	struct addrspace *childAddrspace;
+	if(child == NULL){
+		return ENOMEM;
+	}
+	as_copy(curproc_getas(), &childAddrspace);
+	if(childAddrspace == NULL){
+		proc_destroy(child);
+		return ENOMEM;
+	}	
+	child->p_addrspace = childAddrspace;
+	child->parent = curproc;
+	int pid = assignPid(child);
+	if(pid == ENPROC){
+		//Consider changing to panic -- not sure how these errors
+		//should be handled.
+		proc_destroy(child);
+		return ENPROC;
+	}
+	thread_fork("child proc",child,enter_forked_process,tf,pid);	
+	return 0;
+}

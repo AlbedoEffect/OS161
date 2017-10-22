@@ -26,6 +26,39 @@ struct Pair {
 	int second;
 };
 
+struct Stack {
+	struct Pair *val;
+	struct Stack *next;
+	void createStack(){
+		val = kmalloc(sizeof(struct Pair));
+		val->first = -1;
+		val->second = -1;
+	}
+
+	struct Stack *pop(){
+		val.first = next != NULL ? next->val.first : -1;
+		val.second = next != NULL ? next->val.second : -1;
+		struct Stack * temp = next;
+		next = next->next();
+		return temp;
+	}
+
+	void insert(Pair *val1){
+		KASSERT(val1 != NULL);
+		if(next == NULL){
+			next = kmalloc(sizeof(struct Stack));
+			next->val = val1;
+			return;
+		}
+		next->insert(val);
+	}
+
+	void deleteStack(){
+		kfree(val);
+		if(next != NULL)next->deleteStack();
+	}
+};
+
 static struct lock *inter_lock;
 static struct cv *cvs[4][4]; 
 int inter_state[4][4];

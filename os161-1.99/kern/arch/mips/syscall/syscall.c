@@ -33,6 +33,7 @@
 #include <lib.h>
 #include <mips/trapframe.h>
 #include <thread.h>
+#include <copyinout.h>
 #include <current.h>
 #include <syscall.h>
 
@@ -75,6 +76,7 @@
  * stack, starting at sp+16 to skip over the slots for the
  * registerized values, with copyin().
  */
+
 void
 syscall(struct trapframe *tf)
 {
@@ -131,7 +133,7 @@ syscall(struct trapframe *tf)
 	  break;
 #endif // UW
 	case SYS_fork:
-		err = sys_fork(tf);
+		err = sys_fork(tf,(pid_t*)&retval);
 	break;
  
 	default:
@@ -159,7 +161,6 @@ syscall(struct trapframe *tf)
 	 * Now, advance the program counter, to avoid restarting
 	 * the syscall over and over again.
 	 */
-	
 	tf->tf_epc += 4;
 
 	/* Make sure the syscall code didn't forget to lower spl */
@@ -179,7 +180,11 @@ syscall(struct trapframe *tf)
 void
 enter_forked_process(void * a, unsigned long b)
 {
+	(void)b;
 	struct trapframe *tf = (struct trapframe *)a;
-	tf->tf_v0 = b;
-	mips_usermode(tf);
+	struct trapframe childTf = *tf;
+	childTf.tf_v0 = 0;
+	childTf.tf_epc += 4;
+	childTf.tf_a3 = 0;
+	mips_usermode(&childTf);
 }

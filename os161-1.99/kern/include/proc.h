@@ -47,6 +47,8 @@
 struct pidEntry {
 	int pid;
 	struct proc *parent;
+	struct semaphore *waitSem;
+	int exitCode;
 };
 
 struct pidManager {
@@ -127,7 +129,10 @@ struct addrspace *curproc_setas(struct addrspace *);
 int assignPid(struct proc * proc);
 
 /* Update PID manager on process exit */
-void onExit(struct proc * proc);
+void onExit(struct proc * proc, int exitCode);
+
+struct pidEntry * getChildEntry(int pid);
 
 void pidManager_destroy(struct pidManager* pidManager);
+
 #endif /* _PROC_H_ */

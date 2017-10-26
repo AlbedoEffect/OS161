@@ -80,6 +80,29 @@ static struct semaphore *proc_count_mutex;
 struct semaphore *no_proc_sem;   
 #endif  // UW
 
+int assignPid(struct proc * proc){
+	lock_acquire(pidManagerLock);
+	int i = PID_MIN;
+	while(*(pidManager->pidArray+i-PID_MIN) != NULL && i<= PID_MAX){
+		i++;
+	}
+	if(i > PID_MAX) return ENPROC; 
+	proc->pid = i;
+	struct pidEntry * pidEntry = kmalloc(sizeof(*pidEntry));
+	pidEntry->pid = i;
+	pidEntry->waitSem = sem_create("wait_sem",0);
+	if(pidEntry->waitSem == NULL){
+		panic("couldn't create semaphore for pidEntry!");
+	}
+	*(pidManager->pidArray+i-PID_MIN) = pidEntry;
+	lock_release(pidManagerLock);
+	return i;
+}
+
+struct pidEntry * getChildEntry(int proc){
+	KASSERT(pidManager->pidArray+proc-PID_MIN != NULL);
+	return pidManager->pidArray+proc-PID_MIN;
+}
 
 /*
  * Create a proc structure.
@@ -108,7 +131,6 @@ proc_create(const char *name)
 
 	/* VFS fields */
 	proc->p_cwd = NULL;
-
 #ifdef UW
 	proc->console = NULL;
 #endif // UW
@@ -122,21 +144,7 @@ pidManager_create(void){
 	return kmalloc(sizeof(*pidManager));
 }
 
-int assignPid(struct proc * proc){
-	lock_acquire(pidManagerLock);
-	int i = PID_MIN;
-	while(*((pidManager->pidArray)+i-PID_MIN) != NULL && i<= PID_MAX)i++;
-	if(i > PID_MAX) return ENPROC; 
-	proc->pid = i;
-	struct pidEntry * pidEntry = kmalloc(sizeof(*pidEntry));
-	pidEntry->pid = i;
-	pidEntry->parent = proc->parent;
-	*(pidManauer->pidArray+i) = pidEntry;
-	lock_release(pidManagerLock);
-	return i;
-}
-
-void onExit(struct proc * proc){
+void onExit(struct proc * proc, int exitCode){
 	lock_acquire(pidManagerLock);
 	KASSERT(proc != NULL);
 	int i = 0;
@@ -146,6 +154,9 @@ void onExit(struct proc * proc){
 			if(pidEntry->parent == proc){
 				kfree(pidEntry);
 				*(pidManager->pidArray+i) = NULL;
+			}else if(pidEntry->pid == proc->pid){
+				pidEntry->exitCode = exitCode;
+				V(pidEntry->waitSem);
 			}
 		}
 		i++;
@@ -266,6 +277,9 @@ proc_bootstrap(void)
   if(pidManager == NULL) {
 	panic("could not create pidManager");
   }
+  for(int i = 0; i < PID_MAX - PID_MIN + 1; i++){
+	*(pidManager->pidArray+i) = NULL;
+  }
   pidManagerLock = lock_create("pid lock");
   if(pidManagerLock == NULL) {
 	panic("could not create lock for pidManager");
@@ -333,7 +347,7 @@ proc_create_runprogram(const char *name)
            are created using a call to proc_create_runprogram  */
 	P(proc_count_mutex); 
 	proc_count++;
-	
+	assignPid(proc);
 	V(proc_count_mutex);
 #endif // UW
 

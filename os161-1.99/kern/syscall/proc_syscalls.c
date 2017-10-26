@@ -1,5 +1,6 @@
 #include <types.h>
 #include <kern/errno.h>
+#include <mips/trapframe.h>
 #include <kern/unistd.h>
 #include <kern/wait.h>
 #include <lib.h>
@@ -19,6 +20,7 @@ void sys__exit(int exitcode) {
 
   struct addrspace *as;
   struct proc *p = curproc;
+  int pid = curproc->pid;
   /* for now, just include this to keep the compiler from complaining about
      an unused variable */
   (void)exitcode;
@@ -26,6 +28,7 @@ void sys__exit(int exitcode) {
   DEBUG(DB_SYSCALL,"Syscall: _exit(%d)\n",exitcode);
 
   KASSERT(curproc->p_addrspace != NULL);
+  onExit(proc,exitCode);
   as_deactivate();
   /*
    * clear p_addrspace before calling as_destroy. Otherwise if
@@ -55,7 +58,8 @@ void sys__exit(int exitcode) {
 int
 sys_getpid(pid_t *retval)
 {
-  *retval = curproc->pid;
+  int val = curproc->pid;
+  *retval = val;
   return(0);
 }
 
@@ -69,7 +73,7 @@ sys_waitpid(pid_t pid,
 {
   int exitstatus;
   int result;
-
+  
   /* this is just a stub implementation that always reports an
      exit status of 0, regardless of the actual exit status of
      the specified process.   
@@ -82,8 +86,15 @@ sys_waitpid(pid_t pid,
   if (options != 0) {
     return(EINVAL);
   }
-  /* for now, just pretend the exitstatus is 0 */
-  exitstatus = 0;
+  lock_acquire(pidManagerLock);
+  struct pidEntry * childEntry = getChildEntry(pid);
+ 
+  if(childEntry == NULL || childEntry->parent != curproc){
+	return(EINVAL);
+  }
+  P(childEntry->waitSem);
+  exitstatus = childEntry->exitStatus;
+  lock_release(pidManagerLock);
   result = copyout((void *)&exitstatus,status,sizeof(int));
   if (result) {
     return(result);
@@ -93,7 +104,7 @@ sys_waitpid(pid_t pid,
 }
 
 int
-sys_fork(struct trapframe *tf){
+sys_fork(struct trapframe *tf,pid_t *retval){
 	struct proc* child = proc_create_runprogram("new_child");	
 	struct addrspace *childAddrspace;
 	if(child == NULL){
@@ -106,13 +117,9 @@ sys_fork(struct trapframe *tf){
 	}	
 	child->p_addrspace = childAddrspace;
 	child->parent = curproc;
-	int pid = assignPid(child);
-	if(pid == ENPROC){
-		//Consider changing to panic -- not sure how these errors
-		//should be handled.
-		proc_destroy(child);
-		return ENPROC;
-	}
-	thread_fork("child proc",child,enter_forked_process,tf,pid);	
+	struct trapframe *childTf = kmalloc(sizeof(*tf));
+	*childTf = *tf;	
+	thread_fork("child proc",child,enter_forked_process,childTf,0);	
+	*retval = child->pid;
 	return 0;
 }

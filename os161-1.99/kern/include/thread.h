@@ -38,6 +38,7 @@
 
 #include <array.h>
 #include <spinlock.h>
+#include <synch.h>
 #include <threadlist.h>
 
 struct cpu;
@@ -63,6 +64,11 @@ typedef enum {
 	S_SLEEP,	/* sleeping */
 	S_ZOMBIE,	/* zombie; exited but not yet deleted */
 } threadstate_t;
+
+struct forkInfo {
+	void * d1;
+	void * d2;
+};
 
 /* Thread structure. */
 struct thread {
@@ -104,7 +110,6 @@ struct thread {
 	/*
 	 * Public fields
 	 */
-
 	/* add more here as needed */
 };
 

@@ -50,12 +50,14 @@
 #include <addrspace.h>
 #include <mainbus.h>
 #include <vnode.h>
+#include <copyinout.h>
 
 #include "opt-synchprobs.h"
 
 
 /* Magic number used as a guard value on kernel thread stacks. */
 #define THREAD_STACK_MAGIC 0xbaadf00d
+
 
 /* Wait channel. */
 struct wchan {
@@ -150,7 +152,6 @@ thread_create(const char *name)
 	thread->t_iplhigh_count = 1; /* corresponding to t_curspl */
 
 	/* If you add to struct thread, be sure to initialize here */
-
 	return thread;
 }
 
@@ -524,9 +525,12 @@ thread_fork(const char *name,
 	 * for the spllower() that will be done releasing it.
 	 */
 	newthread->t_iplhigh_count++;
-
+	//struct forkInfo * forkInfo = kmalloc(sizeof(struct forkInfo*));
+	//forkInfo->d2 = newthread;
 	/* Set up the switchframe so entrypoint() gets called */
-	switchframe_init(newthread, entrypoint, data1, data2);
+	//data1 = forkInfo;
+
+	switchframe_init(newthread,entrypoint,data1,data2);
 
 	/* Lock the current cpu's run queue and make the new thread runnable */
 	thread_make_runnable(newthread, false);

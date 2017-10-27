@@ -16,19 +16,14 @@
   /* this implementation of sys__exit does not do anything with the exit code */
   /* this needs to be fixed to get exit() and waitpid() working properly */
 
-void sys__exit(int exitcode) {
+void sys__exit(int exitCode) {
 
   struct addrspace *as;
   struct proc *p = curproc;
-  int pid = curproc->pid;
-  /* for now, just include this to keep the compiler from complaining about
-     an unused variable */
-  (void)exitcode;
-
-  DEBUG(DB_SYSCALL,"Syscall: _exit(%d)\n",exitcode);
+  DEBUG(DB_SYSCALL,"Syscall: _exit(%d)\n",exitCode);
 
   KASSERT(curproc->p_addrspace != NULL);
-  onExit(proc,exitCode);
+  onExit(p,exitCode);
   as_deactivate();
   /*
    * clear p_addrspace before calling as_destroy. Otherwise if
@@ -88,12 +83,15 @@ sys_waitpid(pid_t pid,
   }
   lock_acquire(pidManagerLock);
   struct pidEntry * childEntry = getChildEntry(pid);
- 
+  struct proc * curProc = curproc; 
   if(childEntry == NULL || childEntry->parent != curproc){
+	panic("Error!, %d",curProc->pid);
 	return(EINVAL);
   }
+  lock_release(pidManagerLock);
   P(childEntry->waitSem);
-  exitstatus = childEntry->exitStatus;
+  lock_acquire(pidManagerLock);
+  exitstatus = childEntry->exitCode;
   lock_release(pidManagerLock);
   result = copyout((void *)&exitstatus,status,sizeof(int));
   if (result) {
@@ -117,6 +115,11 @@ sys_fork(struct trapframe *tf,pid_t *retval){
 	}	
 	child->p_addrspace = childAddrspace;
 	child->parent = curproc;
+	struct pidEntry * pidEntry = getChildEntry(child->pid);
+	if(pidEntry == NULL){
+		return EINVAL;
+	}
+	pidEntry->parent = curproc;
 	struct trapframe *childTf = kmalloc(sizeof(*tf));
 	*childTf = *tf;	
 	thread_fork("child proc",child,enter_forked_process,childTf,0);	

@@ -99,10 +99,6 @@ int assignPid(struct proc * proc){
 	return i;
 }
 
-struct pidEntry * getChildEntry(int proc){
-	KASSERT(pidManager->pidArray+proc-PID_MIN != NULL);
-	return pidManager->pidArray+proc-PID_MIN;
-}
 
 /*
  * Create a proc structure.
@@ -144,9 +140,18 @@ pidManager_create(void){
 	return kmalloc(sizeof(*pidManager));
 }
 
+struct pidEntry * getChildEntry(int pid){
+	//KASSERT(pidManager->pidArray+proc-PID_MIN != NULL);
+	struct pidEntry * pidEntry = pidManager->pidArray[pid-PID_MIN];
+	return pidEntry;
+}
+
 void onExit(struct proc * proc, int exitCode){
 	lock_acquire(pidManagerLock);
 	KASSERT(proc != NULL);
+	struct pidEntry * pidEntry = getChildEntry(proc->pid);
+	V(pidEntry->waitSem);
+	pidEntry->exitCode = exitCode;
 	int i = 0;
 	while(i + PID_MIN <= PID_MAX){
 		struct pidEntry * pidEntry = *(pidManager->pidArray+i);
@@ -154,9 +159,6 @@ void onExit(struct proc * proc, int exitCode){
 			if(pidEntry->parent == proc){
 				kfree(pidEntry);
 				*(pidManager->pidArray+i) = NULL;
-			}else if(pidEntry->pid == proc->pid){
-				pidEntry->exitCode = exitCode;
-				V(pidEntry->waitSem);
 			}
 		}
 		i++;

@@ -46,7 +46,7 @@
  */
 struct pidEntry {
 	int pid;
-	struct proc *parent;
+	struct proc * parent;
 	struct semaphore *waitSem;
 	int exitCode;
 };

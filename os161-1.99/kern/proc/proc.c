@@ -118,6 +118,11 @@ proc_create(const char *name)
 		kfree(proc);
 		return NULL;
 	}
+	proc->waitAnySem = sem_create("waitAnySem",0);
+	if(proc->waitAnySem == NULL) {
+		kfree(proc);
+		return NULL;
+	}
 
 	threadarray_init(&proc->p_threads);
 	spinlock_init(&proc->p_lock);
@@ -168,6 +173,8 @@ void onExit(struct proc * proc, int exitCode){
 
 void pidManager_destroy(struct pidManager * pidManager){
 	for(int i = 0; i < PID_MAX-PID_MIN+1; i++){
+		struct pidEntry * pidEntry = *(pidManager->pidArray+i);
+		sem_destroy(pidEntry->waitSem);
 		kfree(pidManager->pidArray+i);
 	}
 	lock_destroy(pidManagerLock);
@@ -202,6 +209,8 @@ proc_destroy(struct proc *proc)
 		VOP_DECREF(proc->p_cwd);
 		proc->p_cwd = NULL;
 	}
+	
+	sem_destroy(proc->waitAnySem);
 
 
 #ifndef UW  // in the UW version, space destruction occurs in sys_exit, not here
@@ -304,7 +313,6 @@ proc_create_runprogram(const char *name)
 	if (proc == NULL) {
 		return NULL;
 	}
-
 #ifdef UW
 	/* open the console - this should always succeed */
 	console_path = kstrdup("con:");

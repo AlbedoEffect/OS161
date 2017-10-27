@@ -79,6 +79,10 @@ struct proc {
 	/* VFS */
 	struct vnode *p_cwd;		/* current working directory */
 
+	/* Semaphore used to implement WAIT_ANY waitpid option
+	 for a given thread */
+	struct semaphore *waitAnySem;
+
 #ifdef UW
   /* a vnode to refer to the console device */
   /* this is a quick-and-dirty way to get console writes working */

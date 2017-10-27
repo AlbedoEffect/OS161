@@ -68,24 +68,20 @@ sys_waitpid(pid_t pid,
 {
   int exitstatus;
   int result;
-  
-  /* this is just a stub implementation that always reports an
-     exit status of 0, regardless of the actual exit status of
-     the specified process.   
-     In fact, this will return 0 even if the specified process
-     is still running, and even if it never existed in the first place.
 
-     Fix this!
-  */
-
-  if (options != 0) {
-    return(EINVAL);
-  }
   lock_acquire(pidManagerLock);
   struct pidEntry * childEntry = getChildEntry(pid);
-  struct proc * curProc = curproc; 
+  if(options == WNOHANG){
+	if(childEntry->waitSem->sem_count == 0){
+		lock_release(pidManagerLock);
+		return ECHILD;
+	}
+  }/*else if(options == WAIT_ANY){
+	P(curproc->waitAnySem);
+	return 
+  }*/
   if(childEntry == NULL || childEntry->parent != curproc){
-	panic("Error!, %d",curProc->pid);
+	lock_release(pidManagerLock);
 	return(EINVAL);
   }
   lock_release(pidManagerLock);

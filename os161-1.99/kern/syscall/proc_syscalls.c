@@ -87,13 +87,13 @@ sys_waitpid(pid_t pid,
   lock_release(pidManagerLock);
   P(childEntry->waitSem);
   lock_acquire(pidManagerLock);
-  exitstatus = childEntry->exitCode;
-  lock_release(pidManagerLock);
+  exitstatus = _MKWAIT_EXIT(childEntry->exitCode);
   result = copyout((void *)&exitstatus,status,sizeof(int));
+  lock_release(pidManagerLock);
   if (result) {
     return(result);
   }
-  *retval = pid;
+  *retval = childEntry->pid;
   return(0);
 }
 

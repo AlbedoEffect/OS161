@@ -83,10 +83,10 @@ struct semaphore *no_proc_sem;
 int assignPid(struct proc * proc){
 	lock_acquire(pidManagerLock);
 	int i = PID_MIN;
-	while(*(pidManager->pidArray+i-PID_MIN) != NULL && i<= PID_MAX){
+	while(*(pidManager->pidArray+i-PID_MIN) != NULL && ((i-PID_MIN)< 3000)){
 		i++;
 	}
-	if(i > PID_MAX) return ENPROC; 
+	if(i-PID_MIN >= 3000) return ENPROC; 
 	proc->pid = i;
 	struct pidEntry * pidEntry = kmalloc(sizeof(*pidEntry));
 	pidEntry->pid = i;
@@ -155,10 +155,14 @@ void onExit(struct proc * proc, int exitCode){
 	lock_acquire(pidManagerLock);
 	KASSERT(proc != NULL);
 	struct pidEntry * pidEntry = getChildEntry(proc->pid);
+	if(pidEntry == NULL){
+		lock_release(pidManagerLock);
+		return;
+	}
 	V(pidEntry->waitSem);
 	pidEntry->exitCode = exitCode;
 	int i = 0;
-	while(i + PID_MIN <= PID_MAX){
+	while(i < 3000){
 		struct pidEntry * pidEntry = *(pidManager->pidArray+i);
 		if(pidEntry != NULL){
 			if(pidEntry->parent == proc){
@@ -172,7 +176,7 @@ void onExit(struct proc * proc, int exitCode){
 }
 
 void pidManager_destroy(struct pidManager * pidManager){
-	for(int i = 0; i < PID_MAX-PID_MIN+1; i++){
+	for(int i = 0; i < 3000; i++){
 		struct pidEntry * pidEntry = *(pidManager->pidArray+i);
 		sem_destroy(pidEntry->waitSem);
 		kfree(pidManager->pidArray+i);
@@ -288,7 +292,7 @@ proc_bootstrap(void)
   if(pidManager == NULL) {
 	panic("could not create pidManager");
   }
-  for(int i = 0; i < PID_MAX - PID_MIN + 1; i++){
+  for(int i = 0; i < 3000; i++){
 	*(pidManager->pidArray+i) = NULL;
   }
   pidManagerLock = lock_create("pid lock");

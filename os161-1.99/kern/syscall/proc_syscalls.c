@@ -122,3 +122,36 @@ sys_fork(struct trapframe *tf,pid_t *retval){
 	*retval = child->pid;
 	return 0;
 }
+
+int
+sys_execv(const char *program, userptr_t args){
+	(void)program;
+	(void)args;
+	/*vaddr_t stackptr;
+	struct addrspace * as;
+	as = as_create();
+	if (as == NULL){
+		return ENOMEM;
+	}
+	char * progName = kmalloc(sizeof(program));
+	copyin(program,progName,sizeof(program));
+
+
+	result = as_define_stack(as,&stackptr);
+	if (result){
+		as_destroy(as);
+		return result;
+	}
+	void * stack = (void *)stackptr;
+	*((char **)*/
+	
+	/*char ** args1 = kmalloc(sizeof(args));
+	copyin(args,args1,sizeof(args));
+	char ** i = 0;
+	int size = 0;
+	while( *(args1+i) != NULL){
+		i += 4;
+		size++;
+	}*/
+	return 0;
+}

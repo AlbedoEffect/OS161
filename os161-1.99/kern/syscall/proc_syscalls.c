@@ -133,9 +133,6 @@ sys_execv(const char *program, userptr_t args){
 	if (as == NULL){
 		return ENOMEM;
 	}
-	char * progName = kmalloc(sizeof(program));
-	copyin(program,progName,sizeof(program));
-
 
 	result = as_define_stack(as,&stackptr);
 	if (result){

@@ -82,21 +82,22 @@ struct semaphore *no_proc_sem;
 
 int assignPid(struct proc * proc){
 	lock_acquire(pidManagerLock);
-	int i = PID_MIN;
-	while(*(pidManager->pidArray+i-PID_MIN) != NULL && ((i-PID_MIN)< 3000)){
-		i++;
-	}
-	if(i-PID_MIN >= 3000) return ENPROC; 
-	proc->pid = i;
+	int size = array_num(pidManager->pidArray);
+	if(size-1+PID_MIN  > PID_MAX) return ENPROC; 
+	proc->pid = size+PID_MIN;
 	struct pidEntry * pidEntry = kmalloc(sizeof(*pidEntry));
-	pidEntry->pid = i;
+	pidEntry->pid = size + PID_MIN;
 	pidEntry->waitSem = sem_create("wait_sem",0);
 	if(pidEntry->waitSem == NULL){
 		panic("couldn't create semaphore for pidEntry!");
 	}
-	*(pidManager->pidArray+i-PID_MIN) = pidEntry;
+	unsigned index;
+	int result = array_add(pidManager->pidArray,pidEntry,&index);
+	if(result){
+		panic("error in adding to array!");
+	}
 	lock_release(pidManagerLock);
-	return i;
+	return index+PID_MIN;
 }
 
 
@@ -146,8 +147,8 @@ pidManager_create(void){
 }
 
 struct pidEntry * getChildEntry(int pid){
-	//KASSERT(pidManager->pidArray+proc-PID_MIN != NULL);
-	struct pidEntry * pidEntry = pidManager->pidArray[pid-PID_MIN];
+	unsigned i = (unsigned)pid - PID_MIN;
+	struct pidEntry * pidEntry = (struct pidEntry *)array_get(pidManager->pidArray, i);
 	return pidEntry;
 }
 
@@ -161,13 +162,14 @@ void onExit(struct proc * proc, int exitCode){
 	}
 	V(pidEntry->waitSem);
 	pidEntry->exitCode = exitCode;
-	int i = 0;
-	while(i < 3000){
-		struct pidEntry * pidEntry = *(pidManager->pidArray+i);
+	unsigned i = 0;
+	unsigned size = array_num(pidManager->pidArray);
+	while(i < size){
+		struct pidEntry * pidEntry = (struct pidEntry *) array_get(pidManager->pidArray,i);
 		if(pidEntry != NULL){
-			if(pidEntry->parent == proc){
+			if(pidEntry->parent == proc){	
+				array_set(pidManager->pidArray,i,NULL);
 				kfree(pidEntry);
-				*(pidManager->pidArray+i) = NULL;
 			}
 		}
 		i++;
@@ -176,11 +178,12 @@ void onExit(struct proc * proc, int exitCode){
 }
 
 void pidManager_destroy(struct pidManager * pidManager){
-	for(int i = 0; i < 3000; i++){
-		struct pidEntry * pidEntry = *(pidManager->pidArray+i);
+	unsigned size = array_num(pidManager->pidArray);
+	for(unsigned i = 0; i < size; i++){
+		struct pidEntry * pidEntry = (struct pidEntry *) array_get(pidManager->pidArray, i);
 		sem_destroy(pidEntry->waitSem);
-		kfree(pidManager->pidArray+i);
 	}
+	array_destroy(pidManager->pidArray);
 	lock_destroy(pidManagerLock);
 }
 
@@ -292,9 +295,7 @@ proc_bootstrap(void)
   if(pidManager == NULL) {
 	panic("could not create pidManager");
   }
-  for(int i = 0; i < 3000; i++){
-	*(pidManager->pidArray+i) = NULL;
-  }
+  pidManager->pidArray = array_create();
   pidManagerLock = lock_create("pid lock");
   if(pidManagerLock == NULL) {
 	panic("could not create lock for pidManager");

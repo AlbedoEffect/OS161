@@ -65,6 +65,7 @@ int sys_getpid(pid_t *retval);
 int sys_waitpid(pid_t pid, userptr_t status, int options, pid_t *retval);
 int sys_fork(struct trapframe *tf, pid_t *retval);
 int sys_execv(const char *program, userptr_t args);
+int performCopy(int argc, char **argv, vaddr_t *stackptr, userptr_t * argvAddr);
 
 #endif // UW
 

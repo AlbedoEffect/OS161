@@ -97,30 +97,11 @@ runprogram(char *progname,int argc, char **argv)
 		/* p_addrspace will go away when curproc is destroyed */
 		return result;
 	}
-	//void * stack = (void *)stackptr;
-	char **argv1 = kmalloc(sizeof(char*)*(argc+1));
-	size_t len = 0;
-	*(argv1+argc) = NULL;
-	for(int i = 0; i < argc; i++){
-		int curLen = strlen(*(argv+i))+1;
-		stackptr -= ROUNDUP(curLen,8);
-
-		result = copyoutstr(*(argv+i),(userptr_t)stackptr,curLen,&len);
-		if(result){
-			panic("couldn't copy!");	
-		}
-		*(argv1+i) = (char *)stackptr;
+	userptr_t argv1Addr;	
+	result = performCopy(argc,argv,&stackptr,&argv1Addr);
+	if(result){
+		return result;
 	}
-	userptr_t argv1Addr;
-	for(int i = 0; i <= argc; i++){
-		stackptr -= sizeof(char*);
-		result = copyout(argv1+(argc-i),(userptr_t)stackptr,sizeof(char*));
-		if(result){
-			panic("couldn't copy! 2");
-		}
-	}
-	argv1Addr = (userptr_t) stackptr;
-	stackptr -= stackptr % 8 == 0 ? 8 : 4;
 	/* Warp to user mode. */
 	enter_new_process(argc /*argc*/,argv1Addr/*userspace addr of argv*/,
 			  stackptr, entrypoint);

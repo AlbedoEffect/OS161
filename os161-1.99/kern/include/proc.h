@@ -39,6 +39,7 @@
 
 #include <spinlock.h>
 #include <limits.h>
+#include <array.h>
 #include <thread.h> /* required for struct threadarray */
 
 /*
@@ -52,7 +53,7 @@ struct pidEntry {
 };
 
 struct pidManager {
-	struct pidEntry *pidArray[PID_MAX - PID_MIN + 1];
+	struct array *pidArray;
 };
 
 struct addrspace;

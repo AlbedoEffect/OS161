@@ -15,18 +15,12 @@
 #include <addrspace.h>
 #include <copyinout.h>
 
-
-  /* this implementation of sys__exit does not do anything with the exit code */
-  /* this needs to be fixed to get exit() and waitpid() working properly */
-
-void sys__exit(int exitCode) {
-
+void destroy_proc(int exitCode){
   struct addrspace *as;
   struct proc *p = curproc;
   DEBUG(DB_SYSCALL,"Syscall: _exit(%d)\n",exitCode);
 
   KASSERT(curproc->p_addrspace != NULL);
-  onExit(p,exitCode);
   as_deactivate();
   /*
    * clear p_addrspace before calling as_destroy. Otherwise if
@@ -49,6 +43,20 @@ void sys__exit(int exitCode) {
   thread_exit();
   /* thread_exit() does not return, so we should never get here */
   panic("return from thread_exit in sys_exit\n");
+
+}
+
+void sys_kill(int exitCode) {
+	onExit(curproc,exitCode,true);
+	destroy_proc(exitCode);
+}
+
+  /* this implementation of sys__exit does not do anything with the exit code */
+  /* this needs to be fixed to get exit() and waitpid() working properly */
+
+void sys__exit(int exitCode) {
+	onExit(curproc,exitCode,false);
+	destroy_proc(exitCode);
 }
 
 
@@ -90,7 +98,7 @@ sys_waitpid(pid_t pid,
   lock_release(pidManagerLock);
   P(childEntry->waitSem);
   lock_acquire(pidManagerLock);
-  exitstatus = _MKWAIT_EXIT(childEntry->exitCode);
+  exitstatus = childEntry->isKilled ? _MKWAIT_SIG(childEntry->exitCode) : _MKWAIT_EXIT(childEntry->exitCode);
   result = copyout((void *)&exitstatus,status,sizeof(int));
   lock_release(pidManagerLock);
   if (result) {

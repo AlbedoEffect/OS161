@@ -152,7 +152,7 @@ struct pidEntry * getChildEntry(int pid){
 	return pidEntry;
 }
 
-void onExit(struct proc * proc, int exitCode){
+void onExit(struct proc * proc, int exitCode,bool isKilled){
 	lock_acquire(pidManagerLock);
 	KASSERT(proc != NULL);
 	struct pidEntry * pidEntry = getChildEntry(proc->pid);
@@ -162,6 +162,7 @@ void onExit(struct proc * proc, int exitCode){
 	}
 	V(pidEntry->waitSem);
 	pidEntry->exitCode = exitCode;
+	pidEntry->isKilled = isKilled;
 	unsigned i = 0;
 	unsigned size = array_num(pidManager->pidArray);
 	while(i < size){

@@ -38,6 +38,12 @@
 
 
 #include <machine/vm.h>
+#include <array.h>
+struct core_map {
+	int *pg_array;
+	int start_addr;
+	int num_pgs;
+};
 
 /* Fault-type arguments to vm_fault() */
 #define VM_FAULT_READ        0    /* A read was attempted */

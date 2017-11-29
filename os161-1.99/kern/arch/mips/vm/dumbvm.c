@@ -50,26 +50,59 @@
  * Wrap rma_stealmem in a spinlock.
  */
 static struct spinlock stealmem_lock = SPINLOCK_INITIALIZER;
-
-void
-vm_bootstrap(void)
-{
-	/* Do nothing. */
-}
+struct core_map coreMap;
+bool init = true;
 
 static
 paddr_t
 getppages(unsigned long npages)
 {
-	paddr_t addr;
+	paddr_t addr = 0;
 
 	spinlock_acquire(&stealmem_lock);
-
-	addr = ram_stealmem(npages);
+	int headFrame = 0;
+	if(init)addr = ram_stealmem(npages);
+	else{
+		unsigned long pageNum = 0;
+		int i = 0;
+		while(i < coreMap.num_pgs){
+			if(coreMap.pg_array[i] == 0){
+				pageNum++;
+			}else{
+				pageNum = 0;
+				i += coreMap.pg_array[i];
+				headFrame = i;
+				continue;
+			}
+			if(pageNum == npages){
+				coreMap.pg_array[headFrame] = npages;
+				addr =  coreMap.start_addr + headFrame*PAGE_SIZE;
+				break;
+			}
+		}
+	}
 	
 	spinlock_release(&stealmem_lock);
 	return addr;
 }
+
+void
+vm_bootstrap(void)
+{
+	paddr_t ram_lo, ram_hi;
+	ram_getsize(&ram_lo,&ram_hi);
+	
+	int numPages = (ram_hi - ram_lo)/PAGE_SIZE;
+	coreMap.num_pgs = numPages;
+ 	coreMap.start_addr = ROUNDUP(ram_lo + (sizeof(int*)*numPages)+PAGE_SIZE,4096);
+	coreMap.pg_array = (int *)PADDR_TO_KVADDR(ram_lo);
+	coreMap.pg_array[0] = (coreMap.start_addr - ram_lo)/PAGE_SIZE;
+	for(int i = 1; i < numPages; i++){
+		coreMap.pg_array[i] = 0;
+	}
+	init = false;
+}
+
 
 /* Allocate/free some kernel-space virtual pages */
 vaddr_t 
@@ -86,9 +119,11 @@ alloc_kpages(int npages)
 void 
 free_kpages(vaddr_t addr)
 {
-	/* nothing - leak the memory. */
-
-	(void)addr;
+	spinlock_acquire(&stealmem_lock);
+	paddr_t paddr = addr - MIPS_KSEG0;
+	int index = (paddr - coreMap.start_addr)/PAGE_SIZE;
+	coreMap.pg_array[index] = 0;	
+	spinlock_release(&stealmem_lock);
 }
 
 void
@@ -236,6 +271,9 @@ as_create(void)
 void
 as_destroy(struct addrspace *as)
 {
+	free_kpages(as->as_pbase1 + MIPS_KSEG0);
+	free_kpages(as->as_pbase2 + MIPS_KSEG0);
+	free_kpages(as->as_stackpbase + MIPS_KSEG0);
 	kfree(as);
 }
 
